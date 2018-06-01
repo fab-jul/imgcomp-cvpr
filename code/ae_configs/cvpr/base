@@ -1,0 +1,32 @@
+use ../base
+
+num_chan_bn = 32
+H_target = 2*0.6  # == 64/C * bpp
+beta = 500
+
+regularization_factor = 0.005
+normalization = FIXED
+
+train_autoencoder = True
+train_probclass = True
+
+arch = 'CVPR'
+
+distortion_to_minimize = ms_ssim
+K_ms_ssim = 5000
+
+centers_initial_range = (-2, 2)
+num_centers = 6
+regularization_factor_centers = 0.1
+
+crop_size = (160, 160)
+
+# Learning Rate and Schedule Config ---
+
+lr_initial = 8e-5
+lr_schedule = DECAY
+lr_schedule_decay_interval = 2  # num epochs before decay
+lr_schedule_decay_rate = 0.1
+
+arch_param_B = 5
+

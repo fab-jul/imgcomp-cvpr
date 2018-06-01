@@ -1,0 +1,43 @@
+num_chan_bn = 3*8*8
+regularization_factor = 1e-2
+constrain normalization :: OFF, FIXED
+normalization = FIXED
+heatmap = True
+
+# Training Parameters
+beta = 250
+train_autoencoder = True
+train_probclass = True
+# ---
+
+arch = 'TwoLayerNet'
+
+constrain distortion_to_minimize :: mse, psnr, ms_ssim
+distortion_to_minimize = mse
+K_psnr = 100
+K_ms_ssim = 5000
+
+centers_initial_range = (-2, 2)
+num_centers = 6
+regularization_factor_centers = 0.1
+H_target = None
+
+crop_size = (128, 128)  # training and testing crop size
+batch_size = 30
+
+# Learning Rate and Schedule Config ---
+
+lr_initial = 1e-4  # initial learning rate
+lr_centers_factor = None  # if not None, LR for centers is LR*lr_centers_factor
+
+constrain optimizer :: ADAM, MOMENTUM, SGD
+optimizer = ADAM
+optimizer_momentum = 0.9  # momentum to use if optimizer == MOMENTUM
+
+constrain lr_schedule :: FIXED, DECAY
+lr_schedule = DECAY
+lr_schedule_decay_interval = 2  # num epochs before decay
+lr_schedule_decay_rate = 0.1
+lr_schedule_decay_staircase = True
+
+arch_param_B = 3

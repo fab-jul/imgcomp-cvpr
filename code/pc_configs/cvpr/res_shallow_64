@@ -1,0 +1,8 @@
+use ../base
+
+lr_initial = 1e-4
+kernel_size = 3
+arch = 'res_shallow'
+
+use_centers_for_padding = True
+arch_param__k = 64

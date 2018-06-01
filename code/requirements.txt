@@ -1,0 +1,12 @@
+fjcommon==0.1.63
+imageio
+matplotlib
+numpy
+Pillow
+scikit-image
+scikit-learn
+scipy
+sklearn
+tensorflow==1.4.1
+tensorflow-tensorboard==0.4.0rc3
+fasteners

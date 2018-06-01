@@ -1,0 +1,26 @@
+arch = 'base'
+
+kernel_size = 5
+
+# Learning Rate and Schedule Config ---
+
+lr_initial = 1e-4  # initial learning rate
+
+constrain optimizer :: ADAM, MOMENTUM, SGD
+optimizer = ADAM
+optimizer_momentum = 0.9  # momentum to use if optimizer == MOMENTUM
+
+constrain lr_schedule :: FIXED, DECAY
+lr_schedule = DECAY
+lr_schedule_decay_interval = 2  # num epochs before decay
+lr_schedule_decay_rate = 0.1
+lr_schedule_decay_staircase = True
+
+arch_param__k = 24
+arch_param__non_linearity = 'relu'
+arch_param__fc = 64
+
+regularization_factor = None
+learn_pad_var = False
+
+use_centers_for_padding = True  # if given, use centers[0] for padding
