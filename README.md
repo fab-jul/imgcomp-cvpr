@@ -4,7 +4,7 @@
   <img src='figs/teaser.jpg' width='440'/>
 </p>
 
-### [[Paper]](https://arxiv.org/pdf/1801.04260)
+### [[Paper]](https://arxiv.org/pdf/1801.04260) [[Citation]](#Citation)
 
 TensorFlow implementation of **Conditional Probability Models for Deep Image Compression**, published in CVPR 2018.
 
@@ -180,3 +180,15 @@ Now it's time to pack the images into TF record files. We will save them in `dat
 Make sure the following environment variable is set before running `train.py`
 
     export RECORDS_ROOT=path_to_data/records
+    
+    
+## Citation
+
+If you use this code for your research, please cite this paper:
+
+    @inproceedings{mentzer2018conditional1,
+        Author = {Mentzer, Fabian and Agustsson, Eirikur and Tschannen, Michael and Timofte, Radu and Van Gool, Luc},
+        Booktitle = {Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR)},
+        Title = {Conditional Probability Models for Deep Image Compression},
+        Year = {2018}}
+
