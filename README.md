@@ -4,7 +4,7 @@
   <img src='figs/teaser.jpg' width='440'/>
 </p>
 
-### [[Paper]](https://arxiv.org/pdf/1801.04260) [[Citation]](#Citation)
+### [[Paper]](https://arxiv.org/pdf/1801.04260) [[Citation]](#citation)
 
 TensorFlow implementation of **Conditional Probability Models for Deep Image Compression**, published in CVPR 2018.
 
