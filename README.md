@@ -1,4 +1,4 @@
-# imgcomp
+# Conditional Probability Models for Deep Image Compression
 
 <p align='center'>
   <img src='figs/teaser.jpg' width='440'/>
@@ -22,7 +22,7 @@ TensorFlow implementation of **Conditional Probability Models for Deep Image Com
 
 ![Plot Kodak](figs/plot_Kodak.png)
 
-NOTE: Inference on works on CUDA-compatible GPUs.
+NOTE: Inference only works on CUDA-compatible GPUs.
 
 ---
 
