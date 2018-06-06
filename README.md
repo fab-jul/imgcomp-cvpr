@@ -39,8 +39,8 @@ where `MODEL_ID` is one of
 and `DATASET` is either the path to a directory of png files or an escaped glob (e.g., `some/images/\*/\*.jpg`). All 
 images readable with PIL should be supported.
 
-This will save outputs in `ckpts/MODEL_ID\ DATASET/imgs` and disblay the mean bpp and MS-SSIM on console. Detailed measures per image are written to `ckpts/MODEL_ID\ DATASET/measures.csv`. Note that some images may be padded 
-on disk.
+This will save outputs in `ckpts/MODEL_ID\ DATASET/imgs` and display the mean bpp and MS-SSIM on console.
+Detailed measures per image are written to `ckpts/MODEL_ID\ DATASET/measures.csv`. Note that some images may be padded.
 
 ---
 
@@ -48,7 +48,7 @@ The plot above was created using
 
     python plotter.py ../ckpts 0515_1103,0515_1309,0515_1310 kodak --style mean --ids A B C --latex
     
-For reference, the curve corresponding to our model in Fig. 1 in the paper can be reproduced with the following data
+For reference, the curve corresponding to our model in Fig. 1 in the paper can be reproduced with the following data:
 
     # bpp -> MS-SSIM on Kodak
     CVPR_FIG1 = [
@@ -83,7 +83,7 @@ For reference, the curve corresponding to our model in Fig. 1 in the paper can b
 
 ## Training
 
-If you want to train on the ImageNet data set as described in the paper, follow the steps below (_Prepare ImageNET_). After doing 
+If you want to train on the ImageNet dataset as described in the paper, follow the steps below (_Prepare ImageNET_). After doing 
 this,
 you can pass `--dataset_train imgnet_train --dataset_test imgnet_test` to `train.py` (make sure you set `$RECORDS_ROOT` for this, 
 see below). Otherwise, set `--dataset_train` and `--dataset_test` 
@@ -97,9 +97,9 @@ to an escaped glob matching images files (e.g. `some/images/\*/\*.jpg`).
 where `AE_CONFIG` and `PC_CONFIG` are one of the configs in the respective folders. The models in `ckpts` where
 obtained with the following configs:
 
-- `0515_1103`: `ae_configs/cvpr/low pc_configs/cvpr/res_shallow`
-- `0515_1309`: `ae_configs/cvpr/med pc_configs/cvpr/res_shallow`
-- `0515_1310`: `ae_configs/cvpr/high pc_configs/cvpr/res_shallow`
+- `0515_1103`: `ae_configs/cvpr/low` `pc_configs/cvpr/res_shallow`
+- `0515_1309`: `ae_configs/cvpr/med` `pc_configs/cvpr/res_shallow`
+- `0515_1310`: `ae_configs/cvpr/high` `pc_configs/cvpr/res_shallow`
 
 Various options are available for `train.py`, such as `--restore` to continue training from a previous checkpoint.
 See `python train.py -h`.
@@ -115,14 +115,14 @@ see e.g.
 - [ImageMagick](https://www.imagemagick.org/script/index.php) to downscale images to 256 pixels
 - `fjcommon` (`pip install fjcommon`) to create TF Records
 
-Note that creating all records will likely take several hours.
+Note that creating all records will likely take several hours. Note that the following was tesed using `zsh`.
 
 ### 1. Get ImageNET, in the proper format
 
-You need to download `ILSVRC2012_img_train.tar` and `ILSVRC2012_img_val.tar` (a good resource is the [Inception 
-`download_imagenet.sh` script](https://github.com/tensorflow/models/blob/master/research/inception/inception/data
-/download_imagenet.sh)). For the following instructions, we assume both tar files are located in a directory `data`.
+You need to download `ILSVRC2012_img_train.tar` and `ILSVRC2012_img_val.tar` (a good resource is the
+[Inception `download_imagenet.sh` script](https://github.com/tensorflow/models/blob/master/research/inception/inception/data/download_imagenet.sh)). For the following instructions, we assume both tar files are located in a directory `data`.
 
+```bash
     # in data/
 
     mkdir train val
@@ -134,14 +134,17 @@ You need to download `ILSVRC2012_img_train.tar` and `ILSVRC2012_img_val.tar` (a 
     pushd val
     tar xvf ../ILSVRC2012_img_val.tar
     popd
+```
 
 This will unpack to 1000 .tar containers into `train/` and 50000 .JPEG images into `val/`. Now, we need to extract the
 training images. This may take a while depending on your setup.
 
+```bash
     # in data/
     pushd train
     find . -name "n*.tar" | parallel -j64 'mkdir -vp {/.} && tar xf {} -C {/.}'
     popd
+```
     
 
 ### 2. Downsample
@@ -149,15 +152,17 @@ training images. This may take a while depending on your setup.
 We downsample each image to have 256 pixels on the shorter side, by executing the following command in `data/`. Again,
  this is very time-consuming, so if you have access to some CPU cluster, it might make sense to run it there.
 
+```bash
     # in data/
     find . -name "*.JPEG" |  parallel -j64 convert -verbose {} -resize "256x256^" {}
-
+```
 
 ### 3. Create records
 
 
 Now it's time to pack the images into TF record files. We will save them in `data/records/`:
 
+```bash
     # in data/
     mkdir -p records/train
     mkdir -p records/val
@@ -173,13 +178,16 @@ Now it's time to pack the images into TF record files. We will save them in `dat
         'OUTPUT_PATH=$(printf "../records/val/val-%05d.tfrecord" {#});' \
         'python -m fjcommon tf_records mk_img_rec {} -o $OUTPUT_PATH --feature_key image/encoded'
     popd
+```
 
 
 ### 4. Set RECORDS_ROOT
 
-Make sure the following environment variable is set before running `train.py`
+Make sure the following environment variable is set before running `train.py`:
 
+```bash
     export RECORDS_ROOT=path_to_data/records
+```
     
     
 ## Citation
