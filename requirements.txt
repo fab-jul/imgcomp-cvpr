@@ -9,4 +9,4 @@ sklearn
 tensorflow-gpu==1.4.1
 tensorflow-tensorboard==0.4.0rc3
 fasteners
-fjcommon==0.1.63
+fjcommon==0.1.69
