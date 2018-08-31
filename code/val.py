@@ -24,6 +24,7 @@ from collections import namedtuple
 
 from val_files import ValidationDirs, MeasuresWriter
 
+import bpp_helpers
 
 
 _VALIDATION_INFO_STR = """
@@ -33,7 +34,7 @@ _VALIDATION_INFO_STR = """
 _CKPT_ITR_INFO_STR = """- Validating ckpt {} ----------"""
 
 
-OutputFlags = namedtuple('OutputFlags', ['save_ours', 'ckpt_step'])
+OutputFlags = namedtuple('OutputFlags', ['save_ours', 'ckpt_step', 'real_bpp'])
 
 
 def validate(val_dirs: ValidationDirs, images_iterator: ImagesIterator, flags: OutputFlags):
@@ -101,6 +102,9 @@ def validate(val_dirs: ValidationDirs, images_iterator: ImagesIterator, flags: O
         'psnr': psnr_val,
     }
 
+    if flags.real_bpp:
+        fetch_dict['sym'] = enc_out_val.symbols  # NCHW
+
     if flags.save_ours:
         fetch_dict['img_out'] = x_out_val_uint8
 
@@ -124,6 +128,11 @@ def validate(val_dirs: ValidationDirs, images_iterator: ImagesIterator, flags: O
 
     # create session
     with tf_helpers.create_session() as sess:
+        if flags.real_bpp:
+            pred = probclass.PredictionNetwork(pc, pc_config, ae.get_centers_variable(), sess)
+            checker = probclass.ProbclassNetworkTesting(pc, ae, sess)
+            bpp_fetcher = bpp_helpers.BppFetcher(pred, checker)
+
         fetcher = sess.make_callable(fetch_dict, feed_list=[x_val_ph])
 
         last_ckpt_itr = missing_checkpoints[-1][0]
@@ -149,6 +158,22 @@ def validate(val_dirs: ValidationDirs, images_iterator: ImagesIterator, flags: O
                 otp = fetcher(img_content)
                 measures_writer.append(img_name, otp)
 
+                if flags.real_bpp:
+                    # Calculate
+                    bpp_real, bpp_theory = bpp_fetcher.get_bpp(
+                            otp['sym'], bpp_helpers.num_pixels_in_image(img_content))
+
+                    # Logging
+                    bpp_loss = otp['bpp']
+                    diff_percent_tr = (bpp_theory/bpp_real) * 100
+                    diff_percent_lt = (bpp_loss/bpp_theory) * 100
+                    print('BPP: Real         {:.5f}\n'
+                          '     Theoretical: {:.5f} [{:5.1f}% of real]\n'
+                          '     Loss:        {:.5f} [{:5.1f}% of real]'.format(
+                            bpp_real, bpp_theory, diff_percent_tr, bpp_loss, diff_percent_lt))
+                    assert abs(bpp_theory - bpp_loss) < 1e-3, 'Expected bpp_theory to match loss! Got {} and {}'.format(
+                            bpp_theory, bpp_loss)
+
                 if flags.save_ours and ckpt_itr == last_ckpt_itr:
                     save_img(img_name, otp['img_out'], val_dirs)
 
@@ -156,7 +181,7 @@ def validate(val_dirs: ValidationDirs, images_iterator: ImagesIterator, flags: O
 
                 print('{: 10d} {img_name} | Mean: {avgs}'.format(
                         img_i, img_name=img_name, avgs=values_aggregator.averages_str()),
-                      end='\r', flush=True)
+                      end=('\r' if not flags.real_bpp else '\n'), flush=True)
 
             measures_writer.close()
 
@@ -251,14 +276,18 @@ def main():
                    help='Every CKPT_STEP-th checkpoint will be validated. Set to 1 to validate all of them. '
                         'Last checkpoint will always be validated. Set to -1 to only validate last.')
     p.add_argument('--reset', action='store_const', const=True, help='Remove previous output')
+    p.add_argument('--real_bpp', action='store_const', const=True,
+                   help='If given, calculate real bpp using arithmetic encoding. Note: in our experiments, '
+                        'this matches the theoretical bpp up to 1% precision. Note: this is very slow.')
 
     flags, unknown_flags = p.parse_known_args()
+
     if unknown_flags:
         print('Unknown flags: {}'.format(unknown_flags))
 
     image_paths, dataset_name = val_images.get_image_paths(flags.images)
     images_iterator = ImagesIterator(image_paths[:flags.how_many], dataset_name, flags.image_cache_max)
-    val_flags = OutputFlags(flags.save_ours, flags.ckpt_step)
+    val_flags = OutputFlags(flags.save_ours, flags.ckpt_step, flags.real_bpp)
 
     for ckpt_dir in logdir_helpers.iter_ckpt_dirs(flags.log_dir_root, flags.job_ids):
         try:

@@ -11,7 +11,7 @@ TensorFlow implementation of **Conditional Probability Models for Deep Image Com
 
 ## Prerequisites
 
-- [Download checkpoints here](http://data.vision.ee.ethz.ch/mentzerf/imgcomp-ckpts/ckpts.tar.gz) and extract them to 
+- [Download checkpoints here](http://data.vision.ee.ethz.ch/mentzerf/imgcomp-ckpts/ckpts.tar.gz) and extract them to
 `ckpts`
 - Python 3 (tested with Python 3.4.5)
 - TensorFlow (tested with tensorflow-gpu version 1.4.1)
@@ -36,18 +36,37 @@ where `MODEL_ID` is one of
 - `0515_1309`: Point **B** in the plot (on Kodak: bpp: 0.677, MS-SSIM: 0.987)
 - `0515_1310`: Point **C** in the plot (on Kodak: bpp: 1.051, MS-SSIM: 0.992)
 
-and `DATASET` is either the path to a directory of png files or an escaped glob (e.g., `some/images/\*/\*.jpg`). All 
+and `DATASET` is either the path to a directory of png files or an escaped glob (e.g., `some/images/\*/\*.jpg`). All
 images readable with PIL should be supported.
 
 This will save outputs in `ckpts/MODEL_ID\ DATASET/imgs` and display the mean bpp and MS-SSIM on console.
 Detailed measures per image are written to `ckpts/MODEL_ID\ DATASET/measures.csv`. Note that some images may be padded.
 
----
+### Encoding to bitstream
+
+By default, `val.py` will use cross entropy to estimate the actual bitrate. In our experiments, this is very close to
+ the real bitrate (<0.1\% difference for most images). But to evaluate this yourself, you can use
+
+    python val.py ../ckpts MODEL_ID DATASET --save_ours --real_bpp
+
+which will use an arithmetic encoder to write the symbols of an image to a file, count the number of bits, and then
+decode the bits to restore the symbols. We note that this is not optimized at all (images from the Kodak validation
+set take ~350s to encode and ~200s to decode). For a practical
+implementation,
+the following should be done:
+- A faster arithmetic encoder should be used (we use the clean but non-optimized code from
+[here](https://github.com/nayuki/Reference-arithmetic-coding)).
+- The probability classifier network should output the logits for all symbols in parallel, instead of sequentially.
+- Decoding should re-use activations, as in [Fast PixelCNN++](https://github.com/PrajitR/fast-pixel-cnn), which
+achieves speedups of up to 183x.
+- Like in classical approaches, the image could be split into blocks and those blocks could be encoded in parallel.
+
+### Plot
 
 The plot above was created using
 
     python plotter.py ../ckpts 0515_1103,0515_1309,0515_1310 kodak --style mean --ids A B C --latex
-    
+
 For reference, the curve corresponding to our model in Fig. 1 in the paper can be reproduced with the following data:
 
     # bpp -> MS-SSIM on Kodak
@@ -83,10 +102,10 @@ For reference, the curve corresponding to our model in Fig. 1 in the paper can b
 
 ## Training
 
-If you want to train on the ImageNet dataset as described in the paper, follow the steps below (_Prepare ImageNET_). After doing 
+If you want to train on the ImageNet dataset as described in the paper, follow the steps below (_Prepare ImageNET_). After doing
 this,
-you can pass `--dataset_train imgnet_train --dataset_test imgnet_test` to `train.py` (make sure you set `$RECORDS_ROOT` for this, 
-see below). Otherwise, set `--dataset_train` and `--dataset_test` 
+you can pass `--dataset_train imgnet_train --dataset_test imgnet_test` to `train.py` (make sure you set `$RECORDS_ROOT` for this,
+see below). Otherwise, set `--dataset_train` and `--dataset_test`
 to an escaped glob matching images files (e.g. `some/images/\*/\*.jpg`).
 
     python train.py ae_configs/cvpr/AE_CONFIG pc_configs/cvpr/PC_CONFIG \
@@ -108,9 +127,9 @@ See `python train.py -h`.
 ## Prepare ImageNET
 
 The following instructions assume that you have the following tools installed:
-- GNU parallel (you can do without but it might take a really long time. Installing should be as simple as 
-`(wget -O - pi.dk/3 || curl pi.dk/3/ || fetch -o - http://pi.dk/3) | bash`, 
-see e.g. 
+- GNU parallel (you can do without but it might take a really long time. Installing should be as simple as
+`(wget -O - pi.dk/3 || curl pi.dk/3/ || fetch -o - http://pi.dk/3) | bash`,
+see e.g.
 [here](https://github.com/mfragkoulis/parallel/blob/master/README))
 - [ImageMagick](https://www.imagemagick.org/script/index.php) to downscale images to 256 pixels
 - `fjcommon` (`pip install fjcommon`) to create TF Records
@@ -145,7 +164,7 @@ training images. This may take a while depending on your setup.
     find . -name "n*.tar" | parallel -j64 'mkdir -vp {/.} && tar xf {} -C {/.}'
     popd
 ```
-    
+
 
 ### 2. Downsample
 
@@ -188,8 +207,8 @@ Make sure the following environment variable is set before running `train.py`:
 ```bash
     export RECORDS_ROOT=path_to_data/records
 ```
-    
-    
+
+
 ## Citation
 
 If you use this code for your research, please cite this paper:

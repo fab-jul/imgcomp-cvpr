@@ -4,6 +4,8 @@ import numpy as np
 from contextlib import contextmanager
 from fjcommon import functools_ext
 from fjcommon import tf_helpers
+import itertools
+import functools
 
 
 def get_network_cls(pc_config):
@@ -49,6 +51,11 @@ class _Network3D(object):
         """
         return cls.get_num_layers() * (config.kernel_size - 1) + 1
 
+    @classmethod
+    def get_context_shape(cls, config):
+        """ Shape as DHW """
+        return context_shape_from_context_size(cls.get_context_size(config))
+
     def auto_pad_value(self, ae):
         return (0 if not self.config.use_centers_for_padding else
                 ae.get_centers_variable()[0])
@@ -59,7 +66,7 @@ class _Network3D(object):
         :param q: NCHW
         :param target_symbols:
         :param is_training:
-        :return: bitcost: NCHW
+        :return: bitcost per symbol: NCHW
         """
         tf_helpers.assert_ndims(q, 4)
 
@@ -120,7 +127,19 @@ class _Network3D(object):
         return tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES,
                                  scope=self._PROBCLASS_SCOPE)
 
+    def logits(self, q, is_training):
+        """ For accessing logits, mimics the structure of bitcost(...) """
+        assert self.reuse, 'Make sure to call bitcost(...) before calling logits(...)'
+        with self._building_ctx(reuse=True):
+            with tf.variable_scope('logits'):
+                return self._logits(q, is_training)
+
     def _logits(self, q, is_training):
+        """
+        :param q: input features, NCHW1, where 1 is the channel dimension of the 3d conv
+        :param is_training:
+        :return:
+        """
         raise NotImplementedError()
 
     @property
@@ -248,8 +267,13 @@ def _get_all_conv3d_weights_in_scope(scope):
 
 def pad_for_probclass3d(x, context_size, pad_value=0, learn_pad_var=False):
     """
-    :param x: NCHW tensorflow Tensor
+    :param x: NCHW tensorflow Tensor or numpy array
     """
+    input_is_tf = not isinstance(x, np.ndarray)
+    if not input_is_tf and x.ndim == 3:  # for bit_counter
+        return remove_batch_dim(pad_for_probclass3d(
+                add_batch_dim(x), context_size, pad_value, learn_pad_var))
+
     with tf.name_scope('pad_cs' + str(context_size)):
         pad = context_size // 2
         assert pad >= 1
@@ -262,8 +286,22 @@ def pad_for_probclass3d(x, context_size, pad_value=0, learn_pad_var=False):
                 [pad, 0],  # don't pad depth_future, it's not seen by any filter
                 [pad, pad],
                 [pad, pad]]
-        assert len(pads) == _get_ndims(x)
-        return tf.pad(x, pads, constant_values=pad_value)
+        assert len(pads) == _get_ndims(x), '{} != {}'.format(len(pads), x.shape)
+
+        pad_fn = tf.pad if input_is_tf else get_np_pad_fn()
+        return pad_fn(x, pads, constant_values=pad_value)
+
+
+def get_np_pad_fn():
+    return functools.partial(np.pad, mode='constant')
+
+
+def add_batch_dim(a):
+    return np.expand_dims(a, 0)
+
+
+def remove_batch_dim(a):
+    return a[0, ...]
 
 
 def pc_pad_grad(x, pad, pad_var):
@@ -304,6 +342,9 @@ def undo_pad_for_probclass3d(x, context_size):
     """
     :param x: NCHW tensorflow Tensor or numpy array
     """
+    if isinstance(x, np.ndarray) and x.ndim == 3:
+        return remove_batch_dim(undo_pad_for_probclass3d(add_batch_dim(x), context_size))
+
     with tf.name_scope('undo_pad_cs' + str(context_size)):
         pad = context_size // 2
         assert pad >= 1
@@ -316,3 +357,126 @@ def _get_ndims(t_or_a):
     except AttributeError:
         return t_or_a.ndim
 
+
+################################################################################
+# Helpers for arithmetic coding, see val.py and bpp_helpers.py
+# Pass --real_bpp to val.py to use this.
+################################################################################
+
+
+def iter_over_blocks(syms, block_sizes):
+    """
+    Iterate over symbols in blocks of size in block_sizes.
+    :param syms: CHW
+    :return: blocks, iterating in order W, H, C
+    """
+    for c_slice, h_slice, w_slice in _iter_block_idices(syms.shape, block_sizes):
+        yield syms[c_slice, h_slice, w_slice]
+
+
+def num_blocks(syms_shape, block_sizes):
+    """ Number of blocks iterated over when iter_over_blocks is called. """
+    return sum(1 for _ in _iter_block_idices(syms_shape, block_sizes))
+
+
+def _iter_block_idices(syms_shape, block_sizes):
+    C, H, W = syms_shape
+    bC, bH, bW = block_sizes
+    last_indices = (C - bC + 1, H - bH + 1, W - bW + 1)
+    for c, h, w in itertools.product(*map(range, last_indices)):
+        yield slice(c, c+bC), slice(h, h+bH), slice(w, w+bW)
+
+
+
+
+
+class ProbclassNetworkTesting(object):
+    """
+    Used to get the bit_cost fully convolutionally for an arbitrariy input. To compare to actual bpp calculation.
+    """
+    def __init__(self, pc: _Network3D, ae, sess):
+        """
+        :param pc: Probability classifier network
+        :param ae: Auotencoder
+        :param sess: session to run
+        """
+        self.input_ph_symbols = tf.placeholder(tf.int64, shape=(None, None, None, None))  # NCHW
+
+        # get q from symbols
+        centers = ae.get_centers_variable()
+        q = tf.gather(centers, self.input_ph_symbols)
+        bit_cost_per_symbol = pc.bitcost(q, self.input_ph_symbols, is_training=False,
+                                         pad_value=pc.auto_pad_value(ae))
+        self.bit_cost_total = tf.reduce_sum(bit_cost_per_symbol)  # single value
+        self.sess = sess
+
+    def get_total_bit_cost(self, symbols):
+        """
+        :param symbols: CHW or NCHW, numpy, all symbols for a given image
+        :return:
+        """
+        if symbols.ndim == 3:
+            return self.get_total_bit_cost(np.expand_dims(symbols, 0))
+        assert symbols.ndim == 4
+        return self.sess.run(self.bit_cost_total, feed_dict={self.input_ph_symbols: symbols})
+
+
+
+class PredictionNetwork(object):
+    """
+    Used for prediction given a slice of the symbols volume
+    """
+    def __init__(self, pc: _Network3D, config, centers, sess, freqs_resolution=1e9):
+        """
+        :param sess: Must be set at the latest before using get_pr or get_freqs
+        """
+        self.pc_class = pc.__class__
+        self.config = config
+        self.input_ctx_shape = self.pc_class.get_context_shape(config)
+        self.input_ctx = tf.placeholder(tf.int64, self.input_ctx_shape)  # symbols!
+        input_ctx_batched = tf.expand_dims(self.input_ctx, 0)  # add batch dimension, 1DHW
+        input_ctx_batched = tf.expand_dims(input_ctx_batched, -1)  # add T dimension for 3d conv, now 1CHW1
+        # Here, in contrast to pc.bitcost(...), q does not need to be padded, as it is part of some context.
+        # Logits will be a 1111L vector, i.e., prediction of the next pixel
+        q = tf.gather(centers, input_ctx_batched)
+        logits = pc.logits(q, is_training=False)
+        self.pr = tf.nn.softmax(logits)
+        self.freqs = tf.squeeze(tf.cast(self.pr * freqs_resolution, tf.int64))
+        self.sess = sess
+
+        self._get_freqs = None
+
+    def pad_symbols_volume(self, symbols):
+        assert symbols.ndim == 3
+        return pad_for_probclass3d(symbols, self.pc_class.get_context_size(self.config))
+
+    def undo_pad_symbols_volume(self, symbols):
+        assert symbols.ndim == 3
+        return undo_pad_for_probclass3d(symbols, self.pc_class.get_context_size(self.config))
+
+    def get_pr(self, input_ctx):
+        """
+        NOTE: input_ctx is expected to be CHW!
+        :param input_ctx: symbols as CHW
+        :return: pr
+        """
+        return np.squeeze(self._run(self.pr, input_ctx))
+
+    def get_freqs(self, input_ctx):
+        """
+        NOTE: input_ctx is expected to be CHW!
+        :param input_ctx: symbols as CHW
+        :return: freqs, int64
+        """
+        if not self._get_freqs:  # makes it slightly faster
+            self._get_freqs = self.sess.make_callable(self.freqs, feed_list=[self.input_ctx])
+        f = self._get_freqs(input_ctx)
+        f = np.maximum(f, 1)
+        assert np.all(f > 0), 'We do not want zero frequencies!: {}'.format(f)
+        return f
+
+    def _run(self, t, input_ctx):
+        assert self.sess is not None, 'Set sess before using get_pr or get_freqs'
+        assert input_ctx.shape == self.input_ctx.shape, '{} != {}'.format(
+                input_ctx.shape, self.input_ctx.shape)
+        return self.sess.run(t, feed_dict={self.input_ctx: input_ctx})
