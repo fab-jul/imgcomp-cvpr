@@ -78,7 +78,7 @@ def _quantize1d(x, centers, sigma, data_format):
         # (B, C, m, L)
         phi_soft = tf.nn.softmax(-sigma       * dist, dim=-1)
     with tf.name_scope('phi_hard'):
-        # (B, C, m, L)
+        # (B, C, m, L) probably not necessary due to the argmax!
         phi_hard = tf.nn.softmax(-_HARD_SIGMA * dist, dim=-1)
 
         symbols_hard = tf.argmax(phi_hard, axis=-1)
