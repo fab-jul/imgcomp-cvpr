@@ -18,6 +18,17 @@ TensorFlow implementation of **Conditional Probability Models for Deep Image Com
 - Python packages as specified by requirements.txt (`pip install -r requirements.txt`)
 - A CUDA-compatible GPU
 
+## Notes about naming in code vs. paper
+
+- `qbar` is the output of Eq. (4), i.e., `qhard` in the forward pass, and `qsoft` in the backward pass, where `qhard` 
+corresponds to Eq. (2) and `qsoft` to Eq. (3).
+- We quantize `z` to one value in the centers `C`. We refer to the index in `C` as `symbols`. So, if e.g. `C = {-2, 
+1, 0,
+ 1, 2}`, and `z=0.75`, `z` is quantized to `C[3] = 1`, making `qhard = 1` and `symbol = 3` (indices start from 0).
+- Our context model (Fig. 3) is called a *probability classifier* in the code, since it resembels a classifier (predicting the symbols). The relevant file is `probclass.py`, and is frequently abbreviated to `pc`.
+- The auto-encoder is found in `autoencoder.py` and abbreviated `ae`.
+- The importance map is called `heatmap` in the code.
+
 ## Inference
 
 ![Plot Kodak](figs/plot_Kodak.png)
