@@ -11,7 +11,7 @@ TensorFlow implementation of **Conditional Probability Models for Deep Image Com
 
 ## Prerequisites
 
-- [Download checkpoints here](http://data.vision.ee.ethz.ch/mentzerf/imgcomp-ckpts/ckpts.tar.gz) and extract them to
+- [Download checkpoints/pre-trained models here](http://data.vision.ee.ethz.ch/mentzerf/imgcomp-ckpts/ckpts.tar.gz) and extract them to
 `ckpts`
 - Python 3 (tested with Python 3.4.5)
 - TensorFlow (tested with tensorflow-gpu version 1.4.1)
