@@ -105,9 +105,6 @@ def train(autoencoder_config_path, probclass_config_path,
     bc_train = pc.bitcost(pc_in, enc_out_train.symbols, is_training=True, pad_value=pc.auto_pad_value(ae))
     bpp_train = bits.bitcost_to_bpp(bc_train, x_train)
     d_train = Distortions(ae_config, x_train, x_out_train, is_training=True)
-    # summing over channel dimension gives 2D heatmap
-    heatmap2D = (tf.reduce_sum(enc_out_train.heatmap, 1) if enc_out_train.heatmap is not None
-                 else None)
 
     # loss ---
     total_loss, H_real, pc_comps, ae_comps = get_loss(
@@ -128,6 +125,10 @@ def train(autoencoder_config_path, probclass_config_path,
                              is_training=False, pad_value=pc.auto_pad_value(ae))
         bpp_test = bits.bitcost_to_bpp(bc_test, x_test)
         d_test = Distortions(ae_config, x_test, x_out_test, is_training=False)
+    
+    # summing over channel dimension gives 2D heatmap
+    heatmap2D = (tf.reduce_sum(enc_out_test.heatmap, 1) if enc_out_test.heatmap is not None
+                 else None)
 
     try:  # Try to get codec distnace for current dataset
         codec_distance_ms_ssim = CodecDistance(datasets.codec_distance, codec='bpg', metric='ms-ssim')
